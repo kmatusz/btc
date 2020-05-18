@@ -40,8 +40,6 @@ df <- xts(full_data[,-1], # data columns (without the first column with date)
           full_data$date) # date/time index
 
 # select out of sample period as 2020-02- 2020-05-05
-df['/2020-01-31',]
-# 
 
 
 
@@ -51,7 +49,6 @@ df_main <- df['2020-01-31/2020-03-31',]
 df_test <- df['2020-04-01/',]
 
 
-df_main
 
 df_plot <- df_main
 df_plot$eth_n <- df_main$eth/max(df_main$eth)
@@ -139,105 +136,117 @@ coeftest(model2)
 autoplot(forecast(model2, h = 95))
 
 
+# Model 3 - auto arima(1,1,0) ----
+model3 <- auto.arima(btc,
+                     d = 1,             # parameter d of ARIMA model
+                     max.p = 10,         # Maximum value of p
+                     max.q = 10,         # Maximum value of q
+                     max.order = 10,    # maximum p+q
+                     start.p = 1,       # Starting value of p in stepwise procedure
+                     start.q = 1,       # Starting value of q in stepwise procedure
+                     ic = "aic",        # Information criterion to be used in model selection.
+                     stepwise = FALSE,  # if FALSE considers all models
+                     allowdrift = TRUE, # include a constant
+                     trace = TRUE)      # show summary of all models considered
+
+model3 <- Arima(btc$btc,  # variable
+                order = c(1, 1, 0)  # (p,d,q) parameters
+)
+
+
+checkresiduals(model3,plot = F)
+# p.val >0.05 - nieskorelowane 
+
+model3 %>% 
+  residuals() %>% 
+  ggtsdisplay(lag.max = 50)
+# all residuals autocorrelations are not significant. Good
+
+coeftest(model3)
+# little significant (0.07)
+
+
 
 
 # Plotting ----
-test_fit1 <- Arima(btc_test, model=model1)
-test_fit2 <- Arima(btc_test, model=model2)
-
-onestep1 <- fitted(test_fit1)
-onestep2 <- fitted(test_fit2)
-
-print(forecast(model1, h = nrow(btc_test)))-> ahead1
-allsteps1 <- ahead1$`Point Forecast`
-
-print(forecast(model2, h = nrow(btc_test)))-> ahead2
-allsteps2 <- ahead2$`Point Forecast`
-
-btc_test %>%
-  fortify() %>%
-  as_tibble() -> btc_test2
-
-btc_test2$onestep1 <- as.numeric(onestep1)  
-btc_test2$onestep2 <- as.numeric(onestep2)
-
-btc_test2$allsteps1 <- as.numeric(allsteps1)  
-btc_test2$allsteps2 <- as.numeric(allsteps2)
-
-accuracy(onestep1, btc_test)
-
-ggplot(btc_test2, aes(x = Index)) +
-  geom_line(aes(y = btc)) +
-  geom_line(aes(y = onestep1), color = 'blue')+
-  geom_line(aes(y = allsteps1), color = 'red')
-
-
-btc_test3 <- btc_test2 %>%
-  pivot_longer(3:6)
-
-autoplot(btc_test) +
-  geom_line(data = btc_test3, aes(x = Index, y= value, color = name))
-
-
-accuracy(onestep, btc_test)
+# test_fit1 <- Arima(btc_test, model=model1)
+# test_fit2 <- Arima(btc_test, model=model2)
+# 
+# onestep1 <- fitted(test_fit1)
+# onestep2 <- fitted(test_fit2)
+# 
+# print(forecast(model1, h = nrow(btc_test)))-> ahead1
+# allsteps1 <- ahead1$`Point Forecast`
+# 
+# print(forecast(model2, h = nrow(btc_test)))-> ahead2
+# allsteps2 <- ahead2$`Point Forecast`
+# 
+# btc_test %>%
+#   fortify() %>%
+#   as_tibble() -> btc_test2
+# 
+# btc_test2$onestep1 <- as.numeric(onestep1)  
+# btc_test2$onestep2 <- as.numeric(onestep2)
+# 
+# btc_test2$allsteps1 <- as.numeric(allsteps1)  
+# btc_test2$allsteps2 <- as.numeric(allsteps2)
+# 
+# accuracy(onestep1, btc_test)
+# 
+# ggplot(btc_test2, aes(x = Index)) +
+#   geom_line(aes(y = btc)) +
+#   geom_line(aes(y = onestep1), color = 'blue')+
+#   geom_line(aes(y = allsteps1), color = 'red')
+# 
+# 
+# btc_test3 <- btc_test2 %>%
+#   pivot_longer(3:6)
+# 
+# autoplot(btc_test) +
+#   geom_line(data = btc_test3, aes(x = Index, y= value, color = name))
+# 
+# 
+# accuracy(onestep, btc_test)
 
 
 # accuracy(fit2)
 
 # compare models ----
 
+save(model1, 
+     model2,
+     model3, 
+     btc, 
+     btc_test,
+     file = 'data/08_outputs.Rdata')
+
+
 # obtain out of sample forecasts
 test_fit1 <- Arima(btc_test, model=model1)
 test_fit2 <- Arima(btc_test, model=model2)
 test_fit3 <- Arima(btc_test, model=model3)
-test_fit4 <- Arima(btc_test, model=model4)
-test_fit5 <- Arima(btc_test, model=model5)
-test_fit7 <- Arima(btc_test, model=model7)
-test_fit9 <- Arima(btc_test, model=model9)
 
 onestep1 <- fitted(test_fit1)
-onestep1 <- fitted(test_fit1)
-onestep1 <- fitted(test_fit1)
-onestep1 <- fitted(test_fit1)
-onestep1 <- fitted(test_fit1)
-onestep1 <- fitted(test_fit1)
-onestep1 <- fitted(test_fit1)
-onestep1 <- fitted(test_fit1)
-onestep1 <- fitted(test_fit1)
+onestep2 <- fitted(test_fit2)
+onestep3 <- fitted(test_fit3)
 
 rmse_out_sample <- rbind(
   accuracy(fitted(test_fit1), btc_test),
   accuracy(fitted(test_fit2), btc_test),
-  accuracy(fitted(test_fit3), btc_test),
-  accuracy(fitted(test_fit4), btc_test),
-  accuracy(fitted(test_fit5), btc_test),
-  accuracy(fitted(test_fit7), btc_test),
-  accuracy(fitted(test_fit9), btc_test)
+  accuracy(fitted(test_fit3), btc_test)
 )[,2]
 
-model1
-model2
-model3
-model4
-model5
-model7
-model9
 
 rmse_in_sample <- rbind(
   accuracy(model1),
   accuracy(model2),
-  accuracy(model3),
-  accuracy(model4),
-  accuracy(model5),
-  # accuracy(model6),
-  accuracy(model7),
-  accuracy(model9)
+  accuracy(model3)
 )[,2]
 
 # model1, model2, model3, model4, model5, model6, model7
 cbind(
-  AIC(model1, model2, model3, model4, model5, model7, model9),
-  BIC(model1, model2, model3, model4, model5, model7, model9),
+  AIC(model1, model2, model3),
+  BIC(model1, model2, model3),
   rmse_in_sample, 
   rmse_out_sample) -> measures
 
@@ -246,21 +255,18 @@ measures[c(3)] <- NULL
 measures %>%
   as_tibble(rownames = 'model_no') -> measures
 
-measures %>%
-  arrange(rmse_in_sample)
-# 2, 9, 7, 3
 
 measures %>%
   arrange(rmse_out_sample)
-# (1, 3), 4, 7, 5, 2, 9
+# 3,2,1
 
 measures %>%
   arrange(AIC)
-# 9,5,4,3
+# 2,3,1
 
 measures %>%
   arrange(BIC)
-# 5,3,7,9
+# 3,2,1
 
 # wygrywa 3
 

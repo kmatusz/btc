@@ -40,13 +40,10 @@ df <- xts(full_data[,-1], # data columns (without the first column with date)
           full_data$date) # date/time index
 
 # select out of sample period as 2020-02- 2020-05-05
-df['/2020-01-31',]
-# 
 
 
 
 
-df_main <- df['/2020-01-31',]
 df_main <- df['2020-01-31/2020-03-31',]
 df_test <- df['2020-04-01/',]
 
@@ -86,11 +83,9 @@ testdf(diff(eth), max.augmentations = 8)
 
 ggAcf(diff(eth), lag.max = 100)
 ggAcf(diff(eth), lag.max = 30)
-#
 # only 4 lag significant
 ggPacf(diff(eth), lag.max = 100)
 ggPacf(diff(eth), lag.max = 30)
-# 
 # significant lags: lnly lag 4 significant
 
 # 4
@@ -164,27 +159,53 @@ coeftest(model3)
 
 autoplot(forecast(model3, h = 5))
 
+# Model 4 ----
+model4 <- auto.arima(eth,
+                     d = 1,             # parameter d of ARIMA model
+                     max.p = 10,         # Maximum value of p
+                     max.q = 10,         # Maximum value of q
+                     max.order = 10,    # maximum p+q
+                     start.p = 1,       # Starting value of p in stepwise procedure
+                     start.q = 1,       # Starting value of q in stepwise procedure
+                     ic = "aic",        # Information criterion to be used in model selection.
+                     stepwise = FALSE,  # if FALSE considers all models
+                     allowdrift = TRUE, # include a constant
+                     trace = TRUE)      # show summary of all models considered
 
 
-fit2 <- Arima(eth_test[1:60], model=model2)
-onestep <- fitted(fit2)
-autoplot(fit2)
+checkresiduals(model4,plot = F)
+# p.val >0.05 - nieskorelowane
 
-plot(a[,1],col="red")
-lines(a[,2],col="blue")
+model4 %>% 
+  residuals() %>% 
+  ggtsdisplay(lag.max = 50)
+# all residuals autocorrelations are not significant. Good
 
-a <- fit2$x
-a$b <- fitted(fit2)
+coeftest(model4)
+# tylko ma4 znaczące
 
-accuracy(fit2)
-# accuracy(fit2)
+
+
+
 
 # compare models ----
+
+save(
+  model1,
+  model2,
+  model3,
+  model4,
+  eth,
+  eth_test,
+  file = 'data/07_outputs.Rdata'
+)
+
+
 rmse <- rbind(
   accuracy(model1),
   accuracy(model2),
-  accuracy(model3)
-  # accuracy(model4),
+  accuracy(model3),
+  accuracy(model4)
   # accuracy(model5)
   # # accuracy(model6),
   # accuracy(model7),
@@ -193,8 +214,61 @@ rmse <- rbind(
 
 # model1, model2, model3, model4, model5, model6, model7
 cbind(
-  AIC(model1, model2, model3),
-  BIC(model1, model2, model3),
+  AIC(model1, model2, model3, model4),
+  BIC(model1, model2, model3, model4),
   rmse)
 
+
+
+
+# obtain out of sample forecasts ----
+test_fit1 <- Arima(eth_test, model=model1)
+test_fit2 <- Arima(eth_test, model=model2)
+test_fit3 <- Arima(eth_test, model=model3)
+test_fit4 <- Arima(eth_test, model=model4)
+
+onestep1 <- fitted(test_fit1)
+onestep2 <- fitted(test_fit2)
+onestep3 <- fitted(test_fit3)
+onestep3 <- fitted(test_fit4)
+
+rmse_out_sample <- rbind(
+  accuracy(fitted(test_fit1), eth_test),
+  accuracy(fitted(test_fit2), eth_test),
+  accuracy(fitted(test_fit3), eth_test),
+  accuracy(fitted(test_fit4), eth_test)
+)[,2]
+
+
+rmse_in_sample <- rbind(
+  accuracy(model1),
+  accuracy(model2),
+  accuracy(model3),
+  accuracy(model4)
+)[,2]
+
+# model1, model2, model3, model4, model5, model6, model7
+cbind(
+  AIC(model1, model2, model3, model4),
+  BIC(model1, model2, model3, model4),
+  rmse_in_sample, 
+  rmse_out_sample) -> measures
+
+measures[c(3)] <- NULL
+
+measures %>%
+  as_tibble(rownames = 'model_no') -> measures
+
+
+measures %>%
+  arrange(rmse_out_sample)
+# 1,2,4,3
+
+measures %>%
+  arrange(AIC)
+# 3,4,2,1
+
+measures %>%
+  arrange(BIC)
+# 3,4,2,1
 

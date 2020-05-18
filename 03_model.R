@@ -1,10 +1,10 @@
 library(xts)
 library(quantmod)
 library(forecast)
-library(tidyverse)
 source('functions/function_testdf.R')
+library(tidyverse)
 
-do_fit <- FALSE
+do_fit <- TRUE
 
 if(!do_fit){
   load('data/models_2.Rdata')
@@ -46,11 +46,10 @@ df <- xts(full_data[,-1], # data columns (without the first column with date)
           full_data$date) # date/time index
 
 # select out of sample period as 2020-02- 2020-05-05
-df['/2020-01-31',]
-# 
 
 btc <- df['/2020-03-31',]$btc
-btc_test <- df['2020-02-01/',]$btc
+# btc_test <- df['2020-02-01/',]$btc
+btc_test <- df['2020-04-01/',]$btc
 
 # quick EDA ----
 
@@ -182,18 +181,22 @@ coeftest(model4)
 autoplot(forecast(model4, h = 95))
 
 
-# model 6 - auto Arima aic (2,1,9)
-model5 <- auto.arima(btc,
-                             d = 1,             # parameter d of ARIMA model
-                             max.p = 20,         # Maximum value of p
-                             max.q = 20,         # Maximum value of q
-                             max.order = 15,    # maximum p+q
-                             start.p = 1,       # Starting value of p in stepwise procedure
-                             start.q = 1,       # Starting value of q in stepwise procedure
-                             ic = "aic",        # Information criterion to be used in model selection.
-                             stepwise = FALSE,  # if FALSE considers all models
-                             allowdrift = TRUE, # include a constant
-                             trace = TRUE)      # show summary of all models considered
+# model 5 - auto Arima aic (2,1,9) ----
+# model5 <- auto.arima(btc,
+#                              d = 1,             # parameter d of ARIMA model
+#                              max.p = 20,         # Maximum value of p
+#                              max.q = 20,         # Maximum value of q
+#                              max.order = 15,    # maximum p+q
+#                              start.p = 1,       # Starting value of p in stepwise procedure
+#                              start.q = 1,       # Starting value of q in stepwise procedure
+#                              ic = "aic",        # Information criterion to be used in model selection.
+#                              stepwise = FALSE,  # if FALSE considers all models
+#                              allowdrift = TRUE, # include a constant
+#                              trace = TRUE)      # show summary of all models considered
+
+model5 <- Arima(btc$btc,  # variable
+                order = c(2, 1, 9)  # (p,d,q) parameters
+)
 
 model5
 
@@ -210,20 +213,23 @@ coeftest(model5)
 
 autoplot(forecast(model4, h = 95))
 
-# Model 6 - auto arima bic(0,1,1)
+# Model 6 - auto arima bic (0,1,1) ----
 
-model6 <- auto.arima(btc,
-                     d = 1,             # parameter d of ARIMA model
-                     max.p = 20,         # Maximum value of p
-                     max.q = 20,         # Maximum value of q
-                     max.order = 30,    # maximum p+q
-                     start.p = 1,       # Starting value of p in stepwise procedure
-                     start.q = 1,       # Starting value of q in stepwise procedure
-                     ic = "bic",        # Information criterion to be used in model selection.
-                     stepwise = FALSE,  # if FALSE considers all models
-                     allowdrift = TRUE, # include a constant
-                     trace = TRUE)      # show summary of all models considered
+# model6 <- auto.arima(btc,
+#                      d = 1,             # parameter d of ARIMA model
+#                      max.p = 20,         # Maximum value of p
+#                      max.q = 20,         # Maximum value of q
+#                      max.order = 30,    # maximum p+q
+#                      start.p = 1,       # Starting value of p in stepwise procedure
+#                      start.q = 1,       # Starting value of q in stepwise procedure
+#                      ic = "bic",        # Information criterion to be used in model selection.
+#                      stepwise = FALSE,  # if FALSE considers all models
+#                      allowdrift = TRUE, # include a constant
+#                      trace = TRUE)      # show summary of all models considered
 
+model6 <- Arima(btc$btc,  # variable
+                order = c(0, 1, 1)  # (p,d,q) parameters
+)
 
 model6
 
@@ -248,9 +254,9 @@ save(
   model4,
   model5,
   model6,
-  model7,
-  
-  file = 'data/models_2.Rdata'
+  btc,
+  btc_test,
+  file = 'data/03_outputs.Rdata'
 )
 
 

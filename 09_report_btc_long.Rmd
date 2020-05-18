@@ -1,0 +1,103 @@
+---
+title: "to_report_03"
+author: "Kamil Matuszelański"
+date: "9 05 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+
+
+```{r}
+library(xts)
+library(quantmod)
+library(forecast)
+library(tidyverse)
+source('functions/function_testdf.R')
+
+do_fit <- FALSE
+
+if(!do_fit){
+  load('data/models_2.Rdata')
+}
+
+theme_set(theme_minimal())
+
+btc_raw <- read_csv("data/Gemini_BTCUSD_d.csv", 
+                    skip = 1)
+
+eth_raw <- read_csv("data/Gemini_ETHUSD_d.csv", 
+                    skip = 1)
+
+
+# data preparation to xts ----
+
+date_to <- as.Date('2018-10-01')
+
+eth_raw %>% 
+  mutate(eth = Close) %>% 
+  select(Date, eth) %>% 
+  rename(date = Date) %>% 
+  filter(date >= date_to) -> eth_cleaned
+
+btc_raw %>%
+  mutate(Date = as.Date(Date)) %>%
+  mutate(btc = Close) %>%
+  select(Date, btc) %>%
+  rename(date = Date) %>% 
+  filter(date >= date_to) -> btc_cleaned
+
+
+full_data <- eth_cleaned %>%
+  full_join(btc_cleaned)
+
+df <- xts(full_data[,-1], # data columns (without the first column with date)
+          full_data$date) # date/time index
+
+```
+
+
+Set btc 
+```{r}
+# select out of sample period as 2020-02- 2020-05-05
+
+btc <- df['/2020-03-31',]$btc
+btc_test <- df['2020-04-01/',]$btc
+```
+
+Test acf, pacf
+
+
+
+```{r}
+testdf(btc, max.augmentations = 1)
+# 1 augumentation is enough
+# not stationary
+```
+
+
+```{r}
+
+testdf(diff(btc), max.augmentations = 0)
+# now it's stationary - no augumentations needed
+```
+
+
+ACF:
+```{r}
+ggAcf(diff(btc), lag.max = 30) + labs(title = 'ACF plot for diff(BTC)')
+# most lags are insignificant, except: 1, 17, 18, 20
+
+```
+
+
+PACF:
+```{r}
+ggPacf(diff(btc), lag.max = 30)
+# significant lags: 1, 9, 20
+```
+
+

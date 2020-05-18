@@ -41,8 +41,9 @@ df <- xts(full_data[,-1], # data columns (without the first column with date)
 df['/2020-01-31',]
 # 
 
-eth <- df['/2020-01-31',]$eth
-eth_test <- df['2020-02-01/',]$eth
+eth <- df['/2020-03-31',]$eth
+eth_test <- df['2020-04-01/',]$eth
+
 
 # quick EDA ----
 
@@ -67,16 +68,14 @@ testdf(diff(eth), max.augmentations = 8)
 ggAcf(diff(eth), lag.max = 100)
 ggAcf(diff(eth), lag.max = 30)
 #
-# most lags are insignificant, except:  5, 20, 34, 41
+# most lags are insignificant, except:  4, 20
 ggPacf(diff(eth), lag.max = 100)
-ggPacf(diff(eth), lag.max = 40)
+ggPacf(diff(eth), lag.max = 30)
 # 
-# significant lags: 5, 15, 20,
+# significant lags: 4,5,20, 29 
 
-# 5, 15, 20, 34
 
-# Start forecasting ---- 
-# with Arima(1,1,1)
+# model 1 - Arima(1,1,1) ---- 
 
 model1 <- Arima(eth$eth,  # variable
                 order = c(1, 1, 1)  # (p,d,q) parameters
@@ -91,16 +90,21 @@ checkresiduals(model1,plot = F,lag = 30)
 model1 %>% 
   residuals() %>% 
   ggtsdisplay()
-# 5, 15, 20 nadal są
+# 4, 20 nadal są
 
 coeftest(model1)
 # both coefficients are not significant!
 
-# model 2 - Arima(20, 1, 20) -----
+# model 2 - Arima(20, 1, 20) with 4, 20 lags -----
+fixed_ar <- rep(0, 20)
+fixed_ar[c(4, 20)] <- NA
+fixed_ar
+
 
 model2 <- Arima(eth$eth,  # variable
-                order = c(20, 1, 20)  # (p,d,q) parameters
-)
+                order = c(20, 1, 20),  # (p,d,q) parameters
+                fixed = c(fixed_ar, fixed_ar)
+                )
 
 model2
 
@@ -110,6 +114,7 @@ checkresiduals(model2,plot = F)
 model2 %>% 
   residuals() %>% 
   ggtsdisplay(lag.max = 50)
+# 1,5,18 became significant
 # all residuals autocorrelations are not significant. Good
 
 coeftest(model2)
@@ -118,15 +123,12 @@ coeftest(model2)
 autoplot(forecast(model2, h = 95))
 
 
-# model 3 - Arima(34, 1, 34) with lags 5, 15, 20, 34, 37 -----
+# model 3 - Arima(20, 1, 20) (all lags) -----
 
-fixed_ar <- rep(0, 34)
-fixed_ar[c(5, 15, 20, 34)] <- NA
-fixed_ar
 
 model3 <- Arima(eth$eth,  # variable
-                order = c(34, 1, 34),  # (p,d,q) parameters
-                fixed = c(fixed_ar, fixed_ar)
+                order = c(20, 1, 20)  # (p,d,q) parameters
+
 )
 
 model3
@@ -137,106 +139,92 @@ checkresiduals(model3,plot = F)
 model3 %>% 
   residuals() %>% 
   ggtsdisplay(lag.max = 50)
-# 37 significant in acf and pacf
+# no significant values!
 
 coeftest(model3)
-# tylko ar,ma15, ma34
 
 autoplot(forecast(model3, h = 95))
 
 
-# model 4 - Arima with lags MA(15, 34, 37), AR(15,37) -----
 
-fixed_ar <- rep(0, 37)
-fixed_ar[c(15,37)] <- NA
-fixed_ar
-fixed_ma <- fixed_ar
-fixed_ma[c(34)] <- NA
-
-model4 <- Arima(eth$eth,  # variable
-                order = c(37, 1, 37),  # (p,d,q) parameters
-                fixed = c(fixed_ar, fixed_ma)
-)
-
-model4
-
-checkresiduals(model4,plot = F)
-# autocorrelated
-
-model4 %>% 
-  residuals() %>% 
-  ggtsdisplay(lag.max = 50)
-# 20 lag significant
-
-coeftest(model4)
-# only ma34 significant
-
-autoplot(forecast(model4, h = 95))
-
-
-# model 5 - Arima(0, 1, 34) with lag ma34 -----
-
-fixed_ma <- rep(0, 34)
-fixed_ma[c(34)] <- NA
+# model 5 - auto Arima aic (4,1,4) ----
+# model5 <- auto.arima(eth,
+#                      d = 1,             # parameter d of ARIMA model
+#                      max.p = 20,         # Maximum value of p
+#                      max.q = 20,         # Maximum value of q
+#                      max.order = 15,    # maximum p+q
+#                      start.p = 1,       # Starting value of p in stepwise procedure
+#                      start.q = 1,       # Starting value of q in stepwise procedure
+#                      ic = "aic",        # Information criterion to be used in model selection.
+#                      stepwise = FALSE,  # if FALSE considers all models
+#                      allowdrift = TRUE, # include a constant
+#                      trace = TRUE)      # show summary of all models considered
 
 model5 <- Arima(eth$eth,  # variable
-                order = c(0, 1, 34),  # (p,d,q) parameters
-                fixed = c(fixed_ma)
+                order = c(4, 1, 4)  # (p,d,q) parameters
+                
 )
 
 model5
 
 checkresiduals(model5,plot = F)
-# autocorrelated
+# not autocorrelated
 
 model5 %>% 
   residuals() %>% 
   ggtsdisplay(lag.max = 50)
-# 44, 46 lags are mildly significant in pacf
+# 20 very significant
 
 coeftest(model5)
-# all significant AR9 0.08
 
 autoplot(forecast(model5, h = 95))
 
-# model 6 - Arima(50, 1, 50) with lags 9,20 and added 44, 46, 50 -----
+# Model 6 - auto arima bic(0,1,0) - sic! ----
 
-fixed_ar <- rep(0, 50)
-fixed_ar[c(9,20, 44, 46, 50)] <- NA
-fixed_ar
+# model6 <- auto.arima(eth,
+#                      d = 1,             # parameter d of ARIMA model
+#                      max.p = 20,         # Maximum value of p
+#                      max.q = 20,         # Maximum value of q
+#                      max.order = 30,    # maximum p+q
+#                      start.p = 1,       # Starting value of p in stepwise procedure
+#                      start.q = 1,       # Starting value of q in stepwise procedure
+#                      ic = "bic",        # Information criterion to be used in model selection.
+#                      stepwise = FALSE,  # if FALSE considers all models
+#                      allowdrift = TRUE, # include a constant
+#                      trace = TRUE)      # show summary of all models considered
 
 model6 <- Arima(eth$eth,  # variable
-                order = c(50, 1, 50),  # (p,d,q) parameters
-                fixed = c(fixed_ar, fixed_ar),
-                method="CSS"
+                order = c(0, 1, 0)  # (p,d,q) parameters
+                
 )
 
 model6
 
 checkresiduals(model6,plot = F)
-# autocorrelated
+# not autocorrelated
 
 model6 %>% 
   residuals() %>% 
   ggtsdisplay(lag.max = 50)
-# lags 1, 7 are significant
+# 20 significant
 
 coeftest(model6)
-#po dodaniu 50 dużo insignificant
+# significant
 
 autoplot(forecast(model6, h = 95))
 
 
 
-# model 7 - Arima(50, 1, 50) with all significant lags 9, 17, 18, 20, 40, 44, 46, 50 ----
+
+# model 7 - Arima(4, 1, 4) as in model 5 but with added lag 20 (visible on acf and pacf) ----
 
 
-fixed_ar <- rep(0, 50)
-fixed_ar[c(9,17, 18, 20, 40, 44, 46, 50)] <- NA
+fixed_ar <- rep(0, 20)
+fixed_ar[c(1,2,3,4,20)] <- NA
 fixed_ar
 
 model7 <- Arima(eth$eth,  # variable
-                order = c(50, 1, 50),  # (p,d,q) parameters
+                order = c(20, 1, 20),  # (p,d,q) parameters
                 fixed = c(fixed_ar, fixed_ar)
 )
 
@@ -248,65 +236,26 @@ checkresiduals(model7,plot = F)
 model7 %>% 
   residuals() %>% 
   ggtsdisplay(lag.max = 50)
-# lags 1, is significant
+# no significant lags
 
 coeftest(model7)
-# wszystkie poza ma9 i ar50 insignificant
+# 20 not very significant
 
 autoplot(forecast(model7, h = 95))
-
-# rfe - Arima(20,1,20) z lagami:1,5,8,9,10,12,15,16,18,20 ----
-
-
-fixed_ar <- rep(NA, 20)
-fixed_ar[c(2,3,4,6,7,11,13,14,17,19)] <- 0
-fixed_ar
-
-model9 <- Arima(eth$eth,  # variable
-                order = c(20, 1, 20),  # (p,d,q) parameters
-                fixed = c(fixed_ar, fixed_ar)
-)
-
-
-coeftest(model9)
-# wszystkie poza ma9 i ar50 insignificant
-
-model9
-
-checkresiduals(model9,plot = F)
-# autocorrelated
-
-model9 %>% 
-  residuals() %>% 
-  ggtsdisplay(lag.max = 50)
-# lags 1, is significant
-
-
-autoplot(forecast(model7, h = 95))
-
-
 
 
 # ----
-model8 <- models[[9]]
-
-model8
-
-checkresiduals(model8,plot = F)
-# autocorrelated
-
-model8 %>% 
-  residuals() %>% 
-  ggtsdisplay(lag.max = 50)
-# lags 1, is significant
-
-coeftest(model8)
-# wszystkie poza ma9 i ar50 insignificant
-
-autoplot(forecast(model8, h = 95))
-
-
-
+save(
+  model1,
+  model2,
+  model3,
+  model5,
+  model6,
+  model7,
+  eth,
+  eth_test,
+  file = 'data/05_outputs.Rdata'
+)
 
 
 fit2 <- Arima(eth_test[1:60], model=model2)
@@ -327,19 +276,74 @@ rmse <- rbind(
   accuracy(model1),
   accuracy(model2),
   accuracy(model3),
-  accuracy(model4),
-  accuracy(model5)
-  # # accuracy(model6),
-  # accuracy(model7),
+  # accuracy(model4),
+  accuracy(model5),
+  # accuracy(model6),
+  accuracy(model7)
   # accuracy(model9)
 )[,2]
 
 # model1, model2, model3, model4, model5, model6, model7
 cbind(
-  AIC(model1, model2, model3, model4, model5),
-  BIC(model1, model2, model3, model4, model5),
+  AIC(model1, model2, model3, model5, model7),
+  BIC(model1, model2, model3, model5, model7),
   rmse)
 
 
 # wnioski - autokorelacja residuali nieunikniona
 # prosty model nie jest wiele lepszy od złożonego
+
+
+
+# obtain out of sample forecasts ----
+test_fit1 <- Arima(eth_test, model=model1)
+test_fit2 <- Arima(eth_test, model=model2)
+test_fit3 <- Arima(eth_test, model=model3)
+test_fit5 <- Arima(eth_test, model=model5)
+test_fit7 <- Arima(eth_test, model=model7)
+
+
+rmse_out_sample <- rbind(
+  accuracy(fitted(test_fit1), eth_test),
+  accuracy(fitted(test_fit2), eth_test),
+  accuracy(fitted(test_fit3), eth_test),
+  accuracy(fitted(test_fit5), eth_test),
+  accuracy(fitted(test_fit7), eth_test)
+)[,2]
+
+
+rmse_in_sample <- rbind(
+  accuracy(model1),
+  accuracy(model2),
+  accuracy(model3),
+  # accuracy(model4),
+  accuracy(model5),
+  accuracy(model7)
+)[,2]
+
+# model1, model2, model3, model4, model5, model6, model7
+cbind(
+  AIC(model1, model2, model3, model5, model7),
+  BIC(model1, model2, model3, model5, model7),
+  rmse_in_sample, 
+  rmse_out_sample) -> measures
+
+measures[c(3)] <- NULL
+
+measures %>%
+  as_tibble(rownames = 'model_no') -> measures
+
+
+measures %>%
+  arrange(rmse_out_sample)
+# 3,5,1,7,2
+
+measures %>%
+  arrange(AIC)
+# 7,3,5,2,1
+
+measures %>%
+  arrange(BIC)
+# 2,1,7,5,3
+
+# wygrywa 5, za nim 4

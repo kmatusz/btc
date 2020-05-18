@@ -1,0 +1,803 @@
+---
+title: "Forecasting cryptocurrencies"
+author: "Kamil Matuszelański"
+date: "7 05 2020"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = F, 
+                      message = F,
+                      fig.width = 7,
+                      fig.height = 2,
+                      echo = F
+                      )
+```
+
+```{r}
+library(xts)
+library(quantmod)
+library(forecast)
+library(vars)
+source('functions/function_testdf.R')
+library(tidyverse)
+btc_long <- new.env()
+load('data/03_outputs.Rdata', envir = btc_long)
+
+eth_long <- new.env()
+load('data/05_outputs.Rdata', envir = eth_long)
+
+btc_small <- new.env()
+load('data/08_outputs.Rdata', envir = btc_small)
+
+eth_small <- new.env()
+load('data/07_outputs.Rdata', envir = eth_small)
+
+
+vars <- new.env()
+load('data/06_outputs.Rdata', envir = vars)
+
+theme_set(theme_minimal())
+```
+
+
+
+
+### Abstract
+
+This study is aimed at price prediction of two most popular cryptocurrencies - Bitcoin and Ethereum. I have used 2 popular approaches to time series analysis, namely ARIMA and Vector AutoRegressive models. One of the goals of this study is comparison of performance of these two methods, directly measured by performance on out-of-sample period. I have shown that ARIMA models generally outperforms VAR approach.
+
+### Introduction
+
+I have restricted my study to the period between 10.2018 and 04.2020. 
+
+Etherum is a younger currency than Bitcoin - it was created on (??). Below the two series are plotted against each other. As Etherum is lower priced than Bitcoin (212 vs 9731 USD as of 09.05.2020), values on the plot are max-scaled. I have decided to  have (??) as test set. This gives ? vs ? train/test split. 
+
+One of the goals of this study was to compare results of using Vector Auto Regressive model and casual ARIMA models on the two series. However, analysis of residuals obtained from .. shows that the two series are not cointegrated the whole time. Below plot of residuals obtained from linear regression eth vs. btc is presented. Thus, I have decided to limit the scope of the data used to fitting VAR model to range .. . In this period the series are cointegrated, as proven by both .. and .. tests. 
+
+I have tried to fit ARIMA models to both shorter and longer period. This will help to assess whether ARIMA model is capable of improving its accuracy on hold-out sample given more data points. 
+
+Below I have included description of analysis conducted, first fitting ARIMA model to longer periond for ETH and BTC, then fitting ARIMA to longer period, and lastly process of fitting VAR model to shorter series. 
+
+I have included full explanation of choosing the best model I have used only for Bitcoin prediction for longer period, and for the other 3 models I have created shorter desription of models fitted.
+
+### Modeling Bitcoin price with ARIMA model with 1.5-year period
+
+Bitcoin series contains echange rates for period from 2018-10-01 to 2020-03-31. This accounts for 548 observations. I have used Augumented Dickey Fuller test to assess stationarity. As it is usually the case with financial data, this series becomes stationary after first differencing. Breusch-Godfrey test indicates that no augumentations are needed (p.value = 0.947). P-value of ADF test is less than 0.01 in that case. As such, ARIMA(p, 1, q) model should be used. 
+
+```{r}
+# testdf(diff(btc_long$btc), max.augmentations = 0)
+```
+
+
+To determine a possible order of the model I have created ACF and PACF plots, shown below. For ACF, most significant lags are 1, 17 (mildly), 18 and 20. For PACF, these are 1, 9 and 20. One should note that such long period of lag could lead to an overly variable-inflated model. This can cause practical problems. Such specification should be used only in very long series. For instance, in the later part of the paper I have estimated the models on smaller period only 60 observations. With maximum included lag 20, one third of the observations would not be used in estimation directly.
+
+```{r fig.width=7, fig.height=3}
+rbind(
+as_tibble(as.data.frame(btc_small$btc), rownames = 'date') %>%
+  mutate(scope = 'Short Period',
+         date = as.Date(date)),
+as_tibble(as.data.frame(btc_long$btc), rownames = 'date') %>%
+  mutate(scope = 'Long Period',
+         date = as.Date(date)),
+as_tibble(as.data.frame(btc_long$btc_test), rownames = 'date') %>%
+  mutate(scope = 'Out-of-sample period',
+         date = as.Date(date))
+
+) %>%
+  ggplot(aes(x = date, y = btc, color = scope)) +
+  geom_line() +
+  scale_color_brewer(palette = 'Set1')
+
+```
+
+
+```{r}
+pl1 <- ggAcf(diff(btc_long$btc), lag.max = 30) +
+  labs(title = 'ACF')
+pl2 <- ggPacf(diff(btc_long$btc), lag.max = 30) +
+  labs(title = 'PACF')
+
+gridExtra::grid.arrange(pl1, pl2, ncol = 2)
+
+```
+
+For the first model, I have estimated ARIMA(1, 1, 1) model. Ljung_Box test with p-value=0.17 indicates no autocorrelation of residuals. Below I have created ACF and PACF plots of residuals to assess that. Lag 20 seems to be still significant, while importance of other lags shown to be important before dropped below 5% significance threshold. Z test of coefficients shows that both ar and ma parts seem to be insignificant (p-value 0.43 and 0.64, respectively). 
+
+```{r}
+# btc_long$model1 %>% 
+#   residuals() %>% 
+#   ggtsdisplay(lag.max = 30)
+
+
+pl1 <- ggAcf(residuals(btc_long$model1), lag.max = 30) +
+  labs(title = 'ACF')
+pl2 <- ggPacf(residuals(btc_long$model1), lag.max = 30) +
+  labs(title = 'PACF')
+
+gridExtra::grid.arrange(pl1, pl2, ncol = 2)
+
+```
+
+
+To mitigate autocorrelation on lag 20, I have created a model ARIMA(20,1,20), but only with lags: 1, 9, 17, 18 and 20. P-value for Ljung-Box test being essentially zero indicates that residuals are autocorrelated. However, analysis of autocorrelation plots shows the contrary. No correlation of lags seem to be significant. As of coefficients significance, only ma1 is significant, however some of the coefficients could not be computed by ARIMA optimizer, despite changing increasing the number of iterations. 
+
+```{r}
+# checkresiduals(btc_long$model3,plot = FALSE)
+
+```
+
+
+```{r}
+
+# btc_long$model3 %>% 
+#   residuals() %>% 
+#   ggtsdisplay(lag.max = 30)
+
+pl1 <- ggAcf(residuals(btc_long$model3), lag.max = 30) +
+  labs(title = 'ACF')
+pl2 <- ggPacf(residuals(btc_long$model3), lag.max = 30) +
+  labs(title = 'PACF')
+
+gridExtra::grid.arrange(pl1, pl2, ncol = 2)
+
+```
+
+```{r}
+# coeftest(btc_long$model3)
+```
+
+
+
+I have also tried to fit ARIMA model automatically with *forecast* package. Using Akaike Information Criterion as goodness-of-fit measure, best model chosen was ARIMA(2, 1, 9). Within this model Ljung-Box test shows lack of autocorrelation of residuals (p-value = 0.09). However, all coefficients seem to be insignificant. 
+
+Model ARIMA(0,1,1) was selected as the best candidate using BIC criterion.
+
+
+```{r}
+# checkresiduals(btc_long$model5,plot = F)
+```
+
+
+```{r}
+# btc_long$model5 %>% 
+#   residuals() %>% 
+#   ggtsdisplay(lag.max = 30)
+pl1 <- ggAcf(residuals(btc_long$model5), lag.max = 30) +
+  labs(title = 'ACF')
+pl2 <- ggPacf(residuals(btc_long$model5), lag.max = 30) +
+  labs(title = 'PACF')
+
+gridExtra::grid.arrange(pl1, pl2, ncol = 2)
+
+```
+
+```{r}
+# coeftest(btc_long$model5)
+```
+
+I have compared models' performance using AIC and BIC criterion. I have also used validation on out-of-sample period using RMSE measure. Test set consisted of 35 observations for period from 01.04.2020 to 05.05.2020. I have used one-step-ahed forecast, rather than estimation for the whole test period at once. There was number of reasons for that. First, forecasting from ARIMA models becomes very unreliable after longer period, as predictions regress to the mean value of the series. Second, estimating financial assets prices is a very non-trivial task, and variance of possible scenarios grows rapidly with increment in number of steps ahead.
+
+In the below table, models introduced previously are presented. The table is sorted by RMSE error on out-of-sample data. As can be seen, best model by this criterium is given by specification ARIMA(2,1,9).
+
+
+```{r}
+with(btc_long, {
+# obtain out of sample forecasts
+test_fit1 <- Arima(btc_test, model=model1)
+test_fit3 <- Arima(btc_test, model=model3)
+test_fit4 <- Arima(btc_test, model=model4)
+test_fit5 <- Arima(btc_test, model=model5)
+test_fit6 <- Arima(btc_test, model=model6)
+
+
+rmse_out_sample <- rbind(
+  accuracy(fitted(test_fit1), btc_test),
+  accuracy(fitted(test_fit3), btc_test),
+  accuracy(fitted(test_fit4), btc_test),
+  accuracy(fitted(test_fit5), btc_test),
+  accuracy(fitted(test_fit6), btc_test)
+)[,2]
+
+rmse_in_sample <- rbind(
+  accuracy(model1),
+  # accuracy(model2),
+  accuracy(model3),
+  accuracy(model4),
+  accuracy(model5),
+  accuracy(model6)
+)[,2]
+
+# model1, model2, model3, model4, model5, model6
+cbind(
+  AIC(model1, model3, model4, model5, model6),
+  BIC(model1, model3, model4, model5, model6),
+  rmse_in_sample, 
+  rmse_out_sample) -> measures
+
+measures[c(3)] <- NULL
+
+measures %>%
+  as_tibble(rownames = 'model_no') -> measures
+
+}) -> btc_measures_long
+
+btc_measures_long %>%
+  mutate(model_desc = str_replace_all(model_no, 
+                                      c('model1' =  'ARIMA(1,1,1)',
+                                        'model3' = 'Included lags 1, 9, 17, 18, 20',
+                                        'model4' = 'Included lags 1, 9, 17',
+                                        'model5' = 'ARIMA(2,1,9) (automatically, criterion AIC)',
+                                        'model6' = 'ARIMA(0,1,1) (automatically, criterion BIC)'
+                                        ))) %>%
+  select(model_desc, everything()) -> btc_measures_long
+
+btc_measures_long %>%
+  arrange(rmse_out_sample) %>%
+  select(-model_no) %>%
+  knitr::kable() %>%
+  kableExtra::kable_styling()
+# 5,4,3,1,6,7
+
+
+```
+
+```{r}
+# btc_measures_long %>%
+#   arrange(AIC)
+# 4,3,5,6,1,7
+
+# btc_measures_long %>%
+#   arrange(BIC)
+# 6,7,1,4,3,5
+
+```
+
+
+
+### Modeling Ethereum price with ARIMA model with 1.5-year period
+
+For Ethereum cryptocurrency, I have conducted similar analysis as for Bitcoin. Below I have included series plot with division for long train, short train and test sets. 
+
+```{r fig.width=7, fig.height=3}
+rbind(
+  as_tibble(as.data.frame(eth_small$eth), rownames = 'date') %>%
+    mutate(scope = 'Short Period',
+           date = as.Date(date)),
+  as_tibble(as.data.frame(eth_long$eth), rownames = 'date') %>%
+    mutate(scope = 'Long Period',
+           date = as.Date(date)),
+  as_tibble(as.data.frame(eth_long$eth_test), rownames = 'date') %>%
+    mutate(scope = 'Out-of-sample period',
+           date = as.Date(date))
+  
+) %>%
+  ggplot(aes(x = date, y = eth, color = scope)) +
+  geom_line() +
+  scale_color_brewer(palette = 'Set1')
+```
+
+
+Judging by ACF and PACF plots shown below, only 4 and 20 lags seem to be significant.
+
+```{r}
+eth_long = new.env()
+load('data/05_outputs.Rdata', envir = eth_long)
+```
+
+```{r}
+
+pl1 <- ggAcf(diff(eth_long$eth), lag.max = 30) + labs(title = 'ACF')
+pl2 <- ggPacf(diff(eth_long$eth), lag.max = 30) + labs(title = 'PACF')
+
+gridExtra::grid.arrange(pl1, pl2, ncol = 2)
+```
+
+
+The models I have consecutively tried were:
+
+- ARIMA(1,1,1)
+- ARIMA(20,1,20), but only with lags 4 and 20
+- ARIMA(20,1,20) with all lags
+- ARIMA(4,1,4) - this model was obtained using auto search with Akaike criterion
+- ARIMA(4,1,4), but with added lag 20 (as it was shown as significant in the previous model).
+
+Below I have created goodness-of-fit mesures comparison table for models estimated. The best model for out-of-sample period is ARIMA(20,1,20) with all lags. That model is also rated as secont-best by AIC criterion. It is no surprise that the model is rated as the worst using BIC criterion, as number of parameters estimated is very big. 
+
+
+```{r}
+with(eth_long, {
+test_fit1 <- Arima(eth_test, model=model1)
+test_fit2 <- Arima(eth_test, model=model2)
+test_fit3 <- Arima(eth_test, model=model3)
+test_fit5 <- Arima(eth_test, model=model5)
+test_fit7 <- Arima(eth_test, model=model7)
+
+
+rmse_out_sample <- rbind(
+  accuracy(fitted(test_fit1), eth_test),
+  accuracy(fitted(test_fit2), eth_test),
+  accuracy(fitted(test_fit3), eth_test),
+  accuracy(fitted(test_fit5), eth_test),
+  accuracy(fitted(test_fit7), eth_test)
+)[,2]
+
+
+rmse_in_sample <- rbind(
+  accuracy(model1),
+  accuracy(model2),
+  accuracy(model3),
+  # accuracy(model4),
+  accuracy(model5),
+  accuracy(model7)
+)[,2]
+
+# model1, model2, model3, model4, model5, model6, model7
+cbind(
+  AIC(model1, model2, model3, model5, model7),
+  BIC(model1, model2, model3, model5, model7),
+  rmse_in_sample, 
+  rmse_out_sample) -> measures
+
+measures[c(3)] <- NULL
+
+measures %>%
+  as_tibble(rownames = 'model_no') -> measures
+measures
+}) -> eth_measures_long
+
+eth_measures_long %>%
+  mutate(model_desc = str_replace_all(model_no, 
+                                      c('model1' =  'ARIMA(1,1,1)',
+                                      'model2' =  'Included lags 4, 20',
+                                        'model3' = 'ARIMA(20,1,20)',
+                                        'model5' = 'ARIMA(4,1,4) (automatically, criterion AIC)',
+                                        'model7' = 'ARIMA(4,1,4), with included lag 20'
+                                      ))) %>%
+  select(model_desc, everything()) -> eth_measures_long
+
+
+eth_measures_long %>%
+  arrange(rmse_out_sample) %>%
+  select(-model_no) %>%
+  knitr::kable() %>%
+  kableExtra::kable_styling()
+# 3,5,1,7,2
+
+```
+
+```{r}
+# eth_measures_long %>%
+#   arrange(AIC)
+# # 7,3,5,2,1
+# 
+# eth_measures_long %>%
+#   arrange(BIC)
+# # 2,1,7,5,3
+
+```
+
+### VAR model
+
+Initially, I have tried to create similar analysis as for ARIMA model with Vector Auto Regression. However, this came out to be impossible. The reason is that the series on its full length are not cointegrated. This is proven both by running a regression BTC against ETH and ... test. To create a meaningful comparison between forecasts for VAR and ARIMA models, I had to limit the in-sample period to .. . Below I have included a plot of cropped time series. 
+
+```{r fig.width=7, fig.height=3}
+df_plot <- merge(btc_small$btc, eth_small$eth)
+df_plot$Ethereum <- df_plot$eth/max(df_plot$eth)
+df_plot$Bitcoin <- df_plot$btc/max(df_plot$btc)
+
+autoplot(df_plot[,c('Ethereum', 'Bitcoin')], facets = NULL) +
+  scale_color_brewer(palette = 'Set1')
+```
+
+
+I have used automatic selection to determine the best order of lag. All the criteria (including AIC and BIC) indicated that the best p is 1. However, after fitting the smallest possible model, lag number 4 was still shown to be significant in both bitcoin and ethereum ACF plots. To mitigate that effect, I have also fitted model with 4 lags. In this model, there exist no significant autocorrelations of residuals for both time series.
+
+Table below shows comparison of various goodness-of-fit statistics obtained for VAR(1) and VAR(4) models. RMSEs were obtained using one-step-ahead forecast on the same test dataset as in previous models. As can be seen, RMSE on both BTC and ETH series are lower using model with 1 lag. However, both information criteria are actually lower for model with 4 lags, despite that automatic variable selection showed the contrary. This peculiarity can be probably explained be some approximation used in VARselect function.
+
+
+```{r}
+
+with(vars, {
+rmse_out_sample <- rbind(
+  accuracy(one_step_predictions_test_eth_1, df_test$eth[2:nrow(df_test),1]),
+  accuracy(one_step_predictions_test_eth_4, df_test$eth[5:nrow(df_test),1])
+)[,2]
+
+
+# model1, model2, model3, model4, model5, model6, model7
+cbind(
+  AIC(model1, model2),
+  BIC(model1, model2),
+  rmse_out_sample) -> measures
+
+measures[c(3)] <- NULL
+
+measures %>%
+  as_tibble(rownames = 'model_no') -> measures
+
+}) -> measures_var_eth
+
+# measures_var_eth %>%
+#   arrange(rmse_out_sample)
+# 1,2
+
+
+```
+
+
+```{r}
+
+# measures_var_eth %>%
+#   arrange(AIC)
+# 2,1
+
+# measures_var_eth %>%
+#   arrange(BIC)
+# 2,1
+```
+
+Bitcoin
+
+
+
+```{r}
+
+with(vars, {
+rmse_out_sample <- rbind(
+  accuracy(one_step_predictions_test_btc_1, df_test$btc[2:nrow(df_test),1]),
+  accuracy(one_step_predictions_test_btc_4, df_test$btc[5:nrow(df_test),1])
+)[,2]
+
+
+# model1, model2, model3, model4, model5, model6, model7
+cbind(
+  AIC(model1, model2),
+  BIC(model1, model2),
+  rmse_out_sample) -> measures
+
+measures[c(3)] <- NULL
+
+measures %>%
+  as_tibble(rownames = 'model_no') -> measures
+measures
+}) -> measures_var_btc
+
+# measures_var_btc %>%
+#   arrange(rmse_out_sample)
+# 1,2
+
+
+```
+
+```{r}
+
+# measures_var_btc %>%
+#   arrange(AIC)
+# 2,1
+
+# measures_var_btc %>%
+#   arrange(BIC)
+# 2,1
+```
+
+
+```{r}
+
+measures_var_eth%>%
+  left_join(measures_var_btc %>% select(model_no, rmse_out_sample), by = c("model_no")) %>%
+  rename(rmse_out_sample_eth = rmse_out_sample.x,
+         rmse_out_sample_btc = rmse_out_sample.y) %>%
+  mutate(model_desc = str_replace_all(model_no, 
+                                      c('model1' =  'p = 1',
+                                        'model2' =  'p = 4'
+                                      ))) %>%
+  select(model_desc, everything()) %>%
+  select(-model_no) %>%
+  knitr::kable() %>%
+  kableExtra::kable_styling()
+
+```
+
+
+
+### Model for btc small
+```{r}
+pl1 <- ggAcf(diff(btc_small$btc), lag.max = 30) + labs(title = 'ACF')
+pl2 <- ggPacf(diff(btc_small$btc), lag.max = 30) + labs(title = 'PACF')
+
+gridExtra::grid.arrange(pl1, pl2, ncol = 2)
+
+```
+
+
+
+```{r}
+with(btc_small, {
+test_fit1 <- Arima(btc_test, model=model1)
+test_fit2 <- Arima(btc_test, model=model2)
+test_fit3 <- Arima(btc_test, model=model3)
+
+onestep1 <- fitted(test_fit1)
+onestep2 <- fitted(test_fit2)
+onestep3 <- fitted(test_fit3)
+
+rmse_out_sample <- rbind(
+  accuracy(fitted(test_fit1), btc_test),
+  accuracy(fitted(test_fit2), btc_test),
+  accuracy(fitted(test_fit3), btc_test)
+)[,2]
+
+
+rmse_in_sample <- rbind(
+  accuracy(model1),
+  accuracy(model2),
+  accuracy(model3)
+)[,2]
+
+# model1, model2, model3, model4, model5, model6, model7
+cbind(
+  AIC(model1, model2, model3),
+  BIC(model1, model2, model3),
+  rmse_in_sample, 
+  rmse_out_sample) -> measures
+
+measures[c(3)] <- NULL
+
+measures %>%
+  as_tibble(rownames = 'model_no') -> measures
+
+measures
+}) -> btc_measures_small
+
+btc_measures_small %>%
+  mutate(model_desc = str_replace_all(model_no, 
+                                      c('model1' =  'ARIMA(4,1,4)',
+                                        'model2' =  'Included lag 4',
+                                        'model3' = 'ARIMA(1,1,0) (automatically, criterion AIC)'
+                                      ))) %>%
+  select(model_desc, everything()) -> btc_measures_small
+
+
+btc_measures_small %>%
+  arrange(rmse_out_sample) %>%
+  select(-model_no) %>%
+  knitr::kable() %>%
+  kableExtra::kable_styling()
+# 3,2,1
+
+```
+
+
+```{r}
+
+# btc_measures_small %>%
+#   arrange(AIC)
+# # 2,3,1
+# 
+# btc_measures_small %>%
+#   arrange(BIC)
+# 3,2,1
+```
+
+
+
+
+
+### Model for eth small
+
+In comparing ARIMA and VAR approaches, I have taken into account the fact that comparing models fitted on different periods is not very meaningful. I have also fitted ARIMA models for smaller period, the one in which using VAR model was possible. Below I have included short description of the results and models tested. 
+
+
+
+```{r}
+pl1 <- ggAcf(diff(eth_small$eth), lag.max = 30) + labs(title = 'ACF')
+pl2 <- ggPacf(diff(eth_small$eth), lag.max = 30) + labs(title = 'PACF')
+
+gridExtra::grid.arrange(pl1, pl2, ncol = 2)
+```
+
+
+
+
+```{r}
+with(eth_small, {
+test_fit1 <- Arima(eth_test, model=model1)
+test_fit2 <- Arima(eth_test, model=model2)
+test_fit3 <- Arima(eth_test, model=model3)
+test_fit4 <- Arima(eth_test, model=model4)
+
+onestep1 <- fitted(test_fit1)
+onestep2 <- fitted(test_fit2)
+onestep3 <- fitted(test_fit3)
+onestep3 <- fitted(test_fit4)
+
+rmse_out_sample <- rbind(
+  accuracy(fitted(test_fit1), eth_test),
+  accuracy(fitted(test_fit2), eth_test),
+  accuracy(fitted(test_fit3), eth_test),
+  accuracy(fitted(test_fit4), eth_test)
+)[,2]
+
+
+rmse_in_sample <- rbind(
+  accuracy(model1),
+  accuracy(model2),
+  accuracy(model3),
+  accuracy(model4)
+)[,2]
+
+# model1, model2, model3, model4, model5, model6, model7
+cbind(
+  AIC(model1, model2, model3, model4),
+  BIC(model1, model2, model3, model4),
+  rmse_in_sample, 
+  rmse_out_sample) -> measures
+measures
+measures[c(3)] <- NULL
+measures %>%
+  as_tibble(rownames = 'model_no') -> measures
+
+
+}) -> eth_measures_small
+
+eth_measures_small %>%
+  mutate(model_desc = str_replace_all(model_no, 
+                                      c('model1' =  'ARIMA(4,1,4)',
+                                        'model2' =  'Included lags AR(1,4) and MA(1,2,3,4)',
+                                        'model3' = 'Included lag 4',
+                                        'model4' = 'ARIMA(0,1,4) (automatically, criterion AIC)'
+                                      ))) %>%
+  select(model_desc, everything()) -> eth_measures_small
+
+
+
+eth_measures_small %>%
+  arrange(rmse_out_sample) %>%
+  select(-model_no) %>%
+  knitr::kable() %>%
+  kableExtra::kable_styling()
+# 1,2,4,3
+
+
+```
+
+Best 1
+
+```{r}
+
+# eth_measures_small %>%
+#   arrange(AIC)
+# 3,4,2,1
+
+# eth_measures_small %>%
+#   arrange(BIC)
+# 3,4,2,1
+```
+
+
+
+
+One important remark is that significant lags for longer and shorter period differ. One explanation of this is that the series was changing its behaviour on the course of 2 years. However, this wasn't indicated by the stationarity tests. One explanation would be that the series is stationary in weak sense, but not in strong.  
+
+### Models comparison
+
+Final step of my analysis was comparison of 3 approachest to modeling Bitcoin and Ethereum prices - ARIMA on 2 year period, ARIMA on shorter, 2-month period and Vector Autoregressive model for the same shorter period. Visualisation of one-step out-of-sample predictions for the 3 models is presented on the plots ... and ... . Allt 3 models behave similarly - they also resemble AR(1) model outcome, that is the predictions look like the dependent variable but lagged one period. Only by comparing goodness-of-fit measures one can determine the best mode.
+
+Such comparison is presented in tables ... and ..., showing various measures for BTC and ETH variables, respectively. Judging by Akaike, Bayesian Information Criteria and forecast accuracy, the ARIMA model for long period gives the best results. Second is ARIMA model for shorter period, and the last one - VAR model. 
+
+One can ask for possible explanations of such rankings. As for comparison between two ARIMA models, the one estimated on 2-year data allowed for including larger lags, which were important for the performance gain. Also, because the series was observed during longer timespan, the model became more robust to random, non-specific fluctuations that could occur in the smaller dataset.
+
+As for the comparison between VAR and ARIMA model, there are possible sources of poorer performance of the latter. First, ARIMA model contrary to VAR includes Moving Average component, and MA lags were highly significant in both BTC and ETH models. Second, ARIMA model allows for setting some of the lags fixed at 0, contrary to VAR. This greater flexibility is probably the main reason of univariate modeling being superior to vector approach. Another on is that the second series in VAR model was probably not a very good predictor. Unfortunately, as the series are not stationary, assessing significance of coeficient in the VAR model was questionable.
+
+
+
+```{r fig.width=7, fig.height=3}
+tibble(
+  true = as.numeric(btc_small$btc_test),
+  short_period = as.numeric(btc_small$onestep3),
+  long_period = as.numeric(fitted(btc_long$test_fit3)),
+  var = c(NA,vars$one_step_predictions_test_btc_1)
+) %>%
+  mutate(time = row_number()) -> btc_preds
+  
+btc_preds %>% 
+  select(-true) %>%
+  pivot_longer(1:3) %>%
+  ggplot(aes(x = time, color = name, y = value)) +
+    geom_line(size = 0.8) +
+    geom_line(data = btc_preds, aes(x = time, y= true), color = 'black')
+
+```
+
+
+#### Bitcoin
+
+```{r}
+btc_measures_long %>%
+  filter(rmse_out_sample == min(rmse_out_sample)) %>%
+  mutate(model_type = 'long period') %>%
+  select(model_type, everything()) -> best_btc_long
+
+btc_measures_small%>%
+  filter(rmse_out_sample == min(rmse_out_sample)) %>%
+  mutate(model_type = 'short period') %>%
+  select(model_type, everything())-> best_btc_small
+
+measures_var_btc%>%
+  filter(rmse_out_sample == min(rmse_out_sample)) %>%
+  mutate(model_type = 'VAR') %>%
+  select(model_type, everything())-> best_btc_var
+
+bind_rows(best_btc_long,
+          best_btc_small,
+          best_btc_var) -> comparison_btc
+
+comparison_btc %>%
+  select(-model_no) %>%
+  knitr::kable() %>%
+  kableExtra::kable_styling()
+
+```
+
+
+#### Ethereum
+
+```{r fig.width=7, fig.height=3}
+tibble(
+  true = as.numeric(eth_small$eth_test),
+  short_period = as.numeric(eth_small$onestep1),
+  long_period = as.numeric(fitted(eth_long$test_fit3)),
+  var = c(NA,vars$one_step_predictions_test_eth_1)
+) %>%
+  mutate(time = row_number()) -> eth_preds
+
+eth_preds %>% 
+  select(-true) %>%
+  pivot_longer(1:3) %>%
+  ggplot(aes(x = time, color = name, y = value)) +
+  geom_line(size = 0.8) +
+  geom_line(data = eth_preds, aes(x = time, y= true), color = 'black')
+
+
+```
+
+
+```{r}
+eth_measures_long %>%
+  filter(rmse_out_sample == min(rmse_out_sample)) %>%
+  mutate(model_type = 'long period') %>%
+  select(model_type, everything()) -> best_eth_long
+
+eth_measures_small%>%
+  filter(rmse_out_sample == min(rmse_out_sample)) %>%
+  mutate(model_type = 'short period') %>%
+  select(model_type, everything())-> best_eth_small
+
+measures_var_eth%>%
+  filter(rmse_out_sample == min(rmse_out_sample)) %>%
+  mutate(model_type = 'VAR') %>%
+  select(model_type, everything())-> best_eth_var
+
+bind_rows(best_eth_long,
+          best_eth_small,
+          best_eth_var) -> comparison_eth
+
+comparison_eth %>%
+  select(-model_no) %>%
+  knitr::kable() %>%
+  kableExtra::kable_styling()
+```
+
+
+
+
+
+#### bibliography
+Hyndman, R.J., & Athanasopoulos, G. (2018) Forecasting: principles and practice, 2nd edition, OTexts: Melbourne, Australia. OTexts.com/fpp2. Accessed on <current date>.
+
+
+
