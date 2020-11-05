@@ -54,6 +54,8 @@ theme_set(theme_minimal())
 
 This study is aimed at price prediction of two most popular cryptocurrencies - Bitcoin and Ethereum. I have used 2 popular approaches to time series analysis, namely ARIMA and Vector AutoRegressive models. One of the goals of this study was comparison of performance of these two methods, directly measured by performance on out-of-sample period. I have shown that ARIMA models generally outperform VAR approach in terms of goodness of fit for out-of-sample period.
 
+Codes for replication of the results present in this study are placed under [this link](https://github.com/kmatusz/btc)
+
 ## Introduction
 
 Nowadays cryptocurrency market is growing rapidly. Current value of the whole sector is estimated at 1.03 Billion dollars, and it is expected to rise to 1.4 billion by 2024. Investors are interested in this market because of independence of classical investment commodities and the premise of astonishing returns. For example, 2017 only, value of the first and the most popular currency, Bitcoin (BTC), rose by 1318%. Although this was a clear bubble and the return next year was -72%, the interest of larger audiences in the whole marked stayed at a high level.

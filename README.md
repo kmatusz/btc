@@ -1,0 +1,3 @@
+This study is aimed at price prediction of two most popular cryptocurrencies - Bitcoin and Ethereum. I have used 2 popular approaches to time series analysis, namely ARIMA and Vector AutoRegressive models. One of the goals of this study was comparison of performance of these two methods, directly measured by performance on out-of-sample period. I have shown that ARIMA models generally outperform VAR approach in terms of goodness of fit for out-of-sample period.
+
+The study was created during Time Series Analysis course led by dr Paweł Sakowski in the academic year 2019/20 on Faculty of Economics, University of Warsaw.
